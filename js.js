@@ -29,10 +29,17 @@ function init() {
   var kone = new cone({alpha:Math.PI/4, l:3});
   var konic = new conic(kone, Math.PI/3, -1);
   window.konic = konic;
-  var geom = genConic(konic,30);
+  var geom = genConic(konic,100);
   console.log(geom);
-  // geom = new THREE.CylinderGeometry(2,2,3,20);
-  var mat = new THREE.MeshBasicMaterial({color: 0xFFAA00, wireframe:false});
+  var mat = new THREE.MeshPhongMaterial({
+        // light
+        specular: '#a9fcff',
+        // intermediate
+        color: '#00abb1',
+        // dark
+        emissive: '#006063',
+        shininess: 100
+      });
   mat.side = THREE.DoubleSide;
   var mesh = new THREE.Mesh(geom, mat);
   window.mesh = mesh;
@@ -49,8 +56,20 @@ function init() {
   var cylender = new THREE.CylinderGeometry(0.2,0.2,0.1, 50, 1, true);
   var cylenderMat = new THREE.MeshBasicMaterial({color: 0x00AAFF, wireframe:true});
   var cylenderMesh = new THREE.Mesh(cylender, cylenderMat);
-  cylenderMesh.position.set(geom.vertices[0].x,geom.vertices[0].y, geom.vertices[0].z);
+  cylenderMesh.position.set(geom.vertices[33].x,geom.vertices[33].y, geom.vertices[33].z);
   scene.add(cylenderMesh);
+
+  //
+
+  // add subtle ambient lighting
+  var ambientLight = new THREE.AmbientLight(0x222222);
+  scene.add(ambientLight);
+
+  // directional lighting
+  var directionalLight = new THREE.DirectionalLight(0xffffff);
+  directionalLight.position.set(1, 1, 1).normalize();
+  directionalLight.lookAt(1,3,3)
+  scene.add(directionalLight);
 
   //
 
@@ -115,7 +134,8 @@ function genConic(conic, widthSegments){
   var p2 = new THREE.Vector3(2, conic.height-3, -3/conic.u);
   var p3 = new THREE.Vector3(-3, conic.height+2, 2/conic.u);
   var p1ane = new plane(p1, p2, p3);
-  var nonIntersetctingVerts = [];
+  var jump = -1;
+  var jumpVertex = 0;
   for(var i = 0; i<widthSegments; i++){
     var x = Math.cos(Math.PI*2/widthSegments*i)*conic.cone.b;
     var z = Math.sin(Math.PI*2/widthSegments*i)*conic.cone.b;
@@ -135,19 +155,55 @@ function genConic(conic, widthSegments){
     if(!skip){
       baseVertices.push(vertices.push(vertex));
       upperVertices.push(vertices.push(int));
+    } else if(jump === -1){
+      jump = i;
+      jumpVertex = i*2-1;
     }
 
   }
-  for(var i = 0; i<widthSegments; i++){
+  for(var i = 0; i<baseVertices.length; i++){
     var max = baseVertices.length;
-    faces.push(new THREE.Face3(baseVertices[i%max]-1, baseVertices[i%max], baseVertices[(i+1)%max]-1));
-    faces.push(new THREE.Face3(baseVertices[i%max], baseVertices[(i+1)%max]-1, baseVertices[(i+1)%max]));
+    if(jump != i+1){
+      faces.push(new THREE.Face3(baseVertices[i%max]-1, baseVertices[i%max], baseVertices[(i+1)%max]-1));
+      faces.push(new THREE.Face3(baseVertices[i%max], baseVertices[(i+1)%max]-1, baseVertices[(i+1)%max]));
+    }
   }
+  var first = jumpVertex-1;
+  max = upperVertices.length;
+  for(var k = 0; k<upperVertices.length; k++){
+    if(upperVertices[(k+1)%max]-1 === upperVertices[max-1]-1){
+
+    } else {
+      faces.push(new THREE.Face3(first, upperVertices[(k)%max]-1, upperVertices[(k+1)%max]-1));
+    }
+  }
+  faces.push(new THREE.Face3(first, upperVertices[upperVertices.length-1]-1, upperVertices[upperVertices.length-1]-2))
   var geom = new THREE.Geometry();
   geom.vertices = vertices;
   geom.faces = faces;
-  geom.computeVertexNormals()
-  geom.computeFaceNormals()
+  for(var i = 0; i<faces.length; i++){
+    var face = faces[i];
+    var v1 = vertices[face.a];
+    var v2 = vertices[face.b];
+    var v3 = vertices[face.c];
+    var u = v2.clone().sub(v1);
+    var v = v3.clone().sub(v1);
+    var normal = new THREE.Vector3(u.y*v.z-u.z*u.y, u.z*v.x-u.x*v.z, u.x*v.y-u.y*v.x);
+    var number = 0;
+    if(v1.y > -conic.cone.h){
+      number++;
+    }
+    if(v2.y > -conic.cone.h){
+      number++;
+    }
+    if(v3.y > -conic.cone.h){
+      number++;
+    }
+    if(number >= 2){
+      normal.multiply(new THREE.Vector3(-1,-1,-1));
+    }
+    face.normal.copy(normal);
+  }
   return geom;
 }
 
@@ -223,63 +279,3 @@ function render() {
   renderer.render( scene, camera );
 
 }
-
-// function genConic(conic, widthSegments){
-//   var baseVertices = [];
-//   var upperVertices = [];
-//   var vertices = [];
-//   var faces = [];
-//   var nonIntersetctingVerts = [];
-//   switch (conic.type){
-//     case "hyperbola":
-//       for(var i = 0; i<widthSegments; i++){
-//         var x = Math.cos(Math.PI*2/widthSegments*i)*conic.cone.b;
-//         var z = Math.sin(Math.PI*2/widthSegments*i)*conic.cone.b;
-//         var vertex = new THREE.Vector3(x, -conic.cone.h, z);
-//         baseVertices.push(vertices.push(vertex));
-//         var m1 = conic.cone.h/z;
-//         var m2 = -conic.cone.h/x;
-//         var xInt = conic.height/(m1-conic.u);
-//         var zInt = m1*xInt;
-//         var yInt = m2*xInt;
-//         if(m1 == Number.POSITIVE_INFINITY || m1 == Number.NEGATIVE_INFINITY){
-//           yInt = conic.height;
-//           xInt = (yInt - conic.height)/conic.u;
-//           zInt = 0;
-//         }
-//         if(yInt <= -conic.cone.h || yInt >= 0 || Math.abs(xInt) > conic.cone.b || Math.abs(zInt) > conic.cone.b){
-//         console.log(baseVertices[baseVertices.length-1]-1);
-//         console.log("x: " + x);
-//         console.log("z: " + z);
-//         console.log("m1: " + m1);
-//         console.log("conic.h: " + conic.cone.h);
-//         console.log("m2: " + m2);
-//         console.log("conic.u: " + conic.u);
-//         console.log("xInt: " + xInt);
-//         console.log("yInt: " + yInt);
-//         console.log("zInt: " + zInt);
-//           vertices.push(new THREE.Vector3(0,0,0));
-//         } else {
-//           vertices.push(new THREE.Vector3(xInt, yInt, zInt));
-//         }
-//       }
-//       for(var i = 0; i<widthSegments; i++){
-//         var max = baseVertices.length;
-//         faces.push(new THREE.Face3(baseVertices[i%max]-1, baseVertices[i%max], baseVertices[(i+1)%max]-1));
-//         faces.push(new THREE.Face3(baseVertices[i%max], baseVertices[(i+1)%max]-1, baseVertices[(i+1)%max]));
-//       }
-//       break;
-//     case "perabola":
-//       console.log(conic);
-//       console.log("per");
-//       break;
-//     default:
-//       console.log("default");
-//   }
-//   var geom = new THREE.Geometry();
-//   geom.vertices = vertices;
-//   geom.faces = faces;
-//   geom.computeVertexNormals()
-//   geom.computeFaceNormals()
-//   return geom;
-// }
