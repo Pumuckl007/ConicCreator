@@ -11,6 +11,7 @@ var cone = function(vars, cone){
 var conic = function(cone, beta, height){
   this.cone = cone;
   this.height = height;
+  this.beta = beta;
   this.m = Math.sin(this.cone.alpha)/(Math.cos(this.cone.alpha));
   this.u = Math.sin(beta)/(Math.cos(beta));
   this.v = height;
