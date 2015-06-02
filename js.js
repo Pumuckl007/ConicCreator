@@ -26,10 +26,10 @@ function init() {
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog( 0x050505, 2000, 3500 );
 
-  var kone = new cone({alpha:Math.PI/4, l:3});
-  var konic = new conic(kone, Math.PI/3, -1);
+  var kone = new cone({alpha:Math.PI/10, l:30});
+  var konic = new conic(kone, Math.PI/30, -5);
   window.konic = konic;
-  var geom = genConic(konic,100);
+  var geom = genConic(konic,1000);
   console.log(geom);
   var mat = new THREE.MeshPhongMaterial({
         // light
@@ -44,20 +44,8 @@ function init() {
   var mesh = new THREE.Mesh(geom, mat);
   window.mesh = mesh;
   scene.add(mesh);
-  var matPlane = new THREE.MeshBasicMaterial({color: 0x0000FF, wireframe:true});
-  var geomPlane = new THREE.PlaneGeometry(5,5,10,10);
-  var meshPlane = new THREE.Mesh(geomPlane, matPlane);
-  meshPlane.rotation.x = (Math.PI/2-Math.PI/3);
-  meshPlane.position.set(0,-1,0)
-  scene.add(meshPlane);
-  window.plane = meshPlane;
   var axes = buildAxes(20);
   scene.add(axes);
-  var cylender = new THREE.CylinderGeometry(0.2,0.2,0.1, 50, 1, true);
-  var cylenderMat = new THREE.MeshBasicMaterial({color: 0x00AAFF, wireframe:true});
-  var cylenderMesh = new THREE.Mesh(cylender, cylenderMat);
-  cylenderMesh.position.set(geom.vertices[33].x,geom.vertices[33].y, geom.vertices[33].z);
-  scene.add(cylenderMesh);
 
   //
 
@@ -67,7 +55,7 @@ function init() {
 
   // directional lighting
   var directionalLight = new THREE.DirectionalLight(0xffffff);
-  directionalLight.position.set(1, 1, 1).normalize();
+  directionalLight.position.set(20, 20, -20).normalize();
   directionalLight.lookAt(1,3,3)
   scene.add(directionalLight);
 
@@ -170,14 +158,30 @@ function genConic(conic, widthSegments){
   }
   var first = jumpVertex-1;
   max = upperVertices.length;
-  for(var k = 0; k<upperVertices.length; k++){
-    if(upperVertices[(k+1)%max]-1 === upperVertices[max-1]-1){
+  if(jump != -1){
+    for(var k = 0; k<upperVertices.length; k++){
+      if(upperVertices[(k+1)%max]-1 === upperVertices[max-1]-1){
 
-    } else {
-      faces.push(new THREE.Face3(first, upperVertices[(k)%max]-1, upperVertices[(k+1)%max]-1));
+      } else {
+        faces.push(new THREE.Face3(first, upperVertices[(k)%max]-1, upperVertices[(k+1)%max]-1));
+      }
+    }
+    faces.push(new THREE.Face3(first, upperVertices[upperVertices.length-1]-1, upperVertices[upperVertices.length-1]-2))
+  } else {
+    average = new THREE.Vector3(0,0,0);
+    for(var i = 0; i<upperVertices.length; i++){
+      var vertex = vertices[upperVertices[i]-1];
+      average.add(vertex);
+    }
+    average.multiply(new THREE.Vector3(1/upperVertices.length, 1/upperVertices.length, 1/upperVertices.length));
+    var averageIndex = vertices.push(average)-1;
+    for(var i = 0; i<upperVertices.length; i++){
+      var vertex = upperVertices[i]-1;
+      var vertex2 = upperVertices[(i+1)%upperVertices.length]-1;
+      var face = new THREE.Face3(vertex, vertex2, averageIndex);
+      faces.push(face);
     }
   }
-  faces.push(new THREE.Face3(first, upperVertices[upperVertices.length-1]-1, upperVertices[upperVertices.length-1]-2))
   var geom = new THREE.Geometry();
   geom.vertices = vertices;
   geom.faces = faces;
@@ -189,22 +193,23 @@ function genConic(conic, widthSegments){
     var u = v2.clone().sub(v1);
     var v = v3.clone().sub(v1);
     var normal = new THREE.Vector3(u.y*v.z-u.z*u.y, u.z*v.x-u.x*v.z, u.x*v.y-u.y*v.x);
-    var number = 0;
-    if(v1.y > -conic.cone.h){
-      number++;
-    }
-    if(v2.y > -conic.cone.h){
-      number++;
-    }
-    if(v3.y > -conic.cone.h){
-      number++;
-    }
-    if(number >= 2){
+    var facePlane = new plane(v1,v2,v3);
+    if(!isPointOnSameSideOfPlaneAsNormal(new THREE.Vector3(0, -conic.cone.h, 0), facePlane)){
       normal.multiply(new THREE.Vector3(-1,-1,-1));
     }
     face.normal.copy(normal);
   }
   return geom;
+}
+
+function isPointOnSameSideOfPlaneAsNormal(point, plane){
+  var v1 = plane.p1;
+  var v2 = plane.p2;
+  var v3 = plane.p3;
+  var u = v2.clone().sub(v1);
+  var v = v3.clone().sub(v1);
+  var normal = new THREE.Vector3(u.y*v.z-u.z*u.y, u.z*v.x-u.x*v.z, u.x*v.y-u.y*v.x);
+  return point.clone().dot(normal) > 0;
 }
 
 function plane(point1, point2, point3){
