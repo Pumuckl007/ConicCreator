@@ -1,8 +1,8 @@
 if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
-var container, stats;
+var container;
 
-var camera, scene, renderer;
+var camera, scene, renderer, valuesForConic;
 
 var mesh;
 
@@ -16,6 +16,9 @@ function init() {
   //
 
   camera = new THREE.PerspectiveCamera( 27, window.innerWidth / window.innerHeight, 1, 3500 );
+  // var width = window.innerWidth;
+  // var height = window.innerHeight;
+  // camera = new THREE.OrthographicCamera( width / - 2, width / 2, height / 2, height / - 2, 1, 1000 );
   camera.position.z = 10;
   camera.position.y = -1;
 
@@ -26,11 +29,14 @@ function init() {
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog( 0x050505, 2000, 3500 );
 
-  var kone = new cone({alpha:Math.PI/10, l:30});
-  var konic = new conic(kone, Math.PI/30, -5);
+  valuesForConic = {alpha:45, beta:30, length: 10, height: -2, quality:100};
+
+  var kone = new cone({alpha:valuesForConic.alpha*Math.PI/180, l:valuesForConic.length});
+  var konic = new conic(kone, valuesForConic.beta*Math.PI/180, valuesForConic.height);
   window.konic = konic;
-  var geom = genConic(konic,1000);
-  console.log(geom);
+  var quality = valuesForConic.quality;
+  var geom = genConicUpsideDown(konic,quality);
+  var geom2 = genConic(konic,quality);
   var mat = new THREE.MeshPhongMaterial({
         // light
         specular: '#a9fcff',
@@ -38,14 +44,20 @@ function init() {
         color: '#00abb1',
         // dark
         emissive: '#006063',
-        shininess: 100
+        shininess: 20,
+        wireframe: false
       });
   mat.side = THREE.DoubleSide;
   var mesh = new THREE.Mesh(geom, mat);
-  window.mesh = mesh;
+  var mesh2 = new THREE.Mesh(geom2, mat);
+  window.cone1 = mesh;
+  window.cone2 = mesh2;
   scene.add(mesh);
-  var axes = buildAxes(20);
+  scene.add(mesh2);
+  var axes = buildAxes(200);
   scene.add(axes);
+
+  document.addEventListener( 'mousemove', heMovedTheMouse, false );
 
   //
 
@@ -70,15 +82,34 @@ function init() {
 
   //
 
-  stats = new Stats();
-  stats.domElement.style.position = 'absolute';
-  stats.domElement.style.top = '0px';
-  container.appendChild( stats.domElement );
-
-  //
-
   window.addEventListener( 'resize', onWindowResize, false );
 
+  var alpha = document.getElementById("alpha");
+  var beta = document.getElementById("beta");
+  var length = document.getElementById("length");
+  var height = document.getElementById("height");
+  var quality = document.getElementById("quality");
+  alpha.onchange = onInputChange;
+  beta.onchange = onInputChange;
+  length.onchange = onInputChange;
+  height.onchange = onInputChange;
+  quality.onchange = onInputChange;
+
+}
+
+function onInputChange(event){
+  valuesForConic[event.srcElement.id] = parseInt(event.srcElement.value);
+  var kone = new cone({alpha:valuesForConic.alpha*Math.PI/180, l:valuesForConic.length});
+  var konic = new conic(kone, valuesForConic.beta*Math.PI/180, valuesForConic.height);
+  var quality = valuesForConic.quality;
+  var geom = genConicUpsideDown(konic,quality);
+  var geom2 = genConic(konic,quality);
+  cone1.geometry = geom;
+  cone2.geometry = geom2;
+}
+
+function heMovedTheMouse(event){
+  controls.enabled = event.toElement.nodeName.toLowerCase() === 'canvas';
 }
 
 function buildAxes( length ) {
@@ -128,9 +159,6 @@ function genConic(conic, widthSegments){
     var x = Math.cos(Math.PI*2/widthSegments*i)*conic.cone.b;
     var z = Math.sin(Math.PI*2/widthSegments*i)*conic.cone.b;
     var vertex = new THREE.Vector3(x, -conic.cone.h, z);
-    var vertexX = 0;
-    var vertexY = -Math.sin(conic.beta)*conic.a;
-    var vertexZ = -Math.cos(conic.beta)*conic.a;
     var l1ne = new line(new THREE.Vector3(-vertex.x, -vertex.y, -vertex.z), vertex);
     var int = solveForIntersection(l1ne, p1ane);
     var skip = false;
@@ -141,11 +169,14 @@ function genConic(conic, widthSegments){
       skip = true;
     }
     if(!skip){
-      baseVertices.push(vertices.push(vertex));
+      var jumpVertexOld = jumpVertex;
+      jumpVertex = baseVertices.push(vertices.push(vertex));
       upperVertices.push(vertices.push(int));
+      if(jump != -1){
+        jumpVertex = jumpVertexOld;
+      }
     } else if(jump === -1){
       jump = i;
-      jumpVertex = i*2-1;
     }
 
   }
@@ -158,15 +189,22 @@ function genConic(conic, widthSegments){
   }
   var first = jumpVertex-1;
   max = upperVertices.length;
-  if(jump != -1){
-    for(var k = 0; k<upperVertices.length; k++){
-      if(upperVertices[(k+1)%max]-1 === upperVertices[max-1]-1){
-
-      } else {
-        faces.push(new THREE.Face3(first, upperVertices[(k)%max]-1, upperVertices[(k+1)%max]-1));
-      }
+  if(jump != -1 && conic.height < 0){
+    var average = new THREE.Vector3(0,0,0);
+    average.add(vertices[baseVertices[jumpVertex-1]-1]);
+    average.add(vertices[baseVertices[jumpVertex]-1]);
+    average.multiply(new THREE.Vector3(0.5,0.5,0.5));
+    first = vertices.push(average)-1;
+    var upVetClone = upperVertices.slice();
+    while(upVetClone[0] != baseVertices[jumpVertex]-1){
+      upVetClone.push(upVetClone.shift());
     }
-    faces.push(new THREE.Face3(first, upperVertices[upperVertices.length-1]-1, upperVertices[upperVertices.length-1]-2))
+    upVetClone.push(upVetClone.shift());
+    for(var k = 0; k<upVetClone.length-1; k++){
+      faces.push(new THREE.Face3(first, upVetClone[k]-1, upVetClone[k+1]-1));
+    }
+    faces.push(new THREE.Face3(first, upVetClone[upVetClone.length-1], upVetClone[upVetClone.length-1]+1))
+    faces.push(new THREE.Face3(first, upVetClone[upVetClone.length-2], upVetClone[upVetClone.length-2]+1));
   } else {
     average = new THREE.Vector3(0,0,0);
     for(var i = 0; i<upperVertices.length; i++){
@@ -195,6 +233,109 @@ function genConic(conic, widthSegments){
     var normal = new THREE.Vector3(u.y*v.z-u.z*u.y, u.z*v.x-u.x*v.z, u.x*v.y-u.y*v.x);
     var facePlane = new plane(v1,v2,v3);
     if(!isPointOnSameSideOfPlaneAsNormal(new THREE.Vector3(0, -conic.cone.h, 0), facePlane)){
+      normal.multiply(new THREE.Vector3(-1,-1,-1));
+    }
+    face.normal.copy(normal);
+  }
+  return geom;
+}
+
+//Upside Down
+
+function genConicUpsideDown(conic, widthSegments){
+  var baseVertices = [];
+  var upperVertices = [];
+  var vertices = [];
+  var faces = [];
+  var p1 = new THREE.Vector3(10, conic.height, 1/conic.u);
+  var p2 = new THREE.Vector3(2, conic.height-3, -3/conic.u);
+  var p3 = new THREE.Vector3(-3, conic.height+2, 2/conic.u);
+  var p1ane = new plane(p1, p2, p3);
+  var jump = -1;
+  var jumpVertex = 0;
+  for(var i = 0; i<widthSegments; i++){
+    var x = Math.cos(Math.PI*2/widthSegments*i)*conic.cone.b;
+    var z = Math.sin(Math.PI*2/widthSegments*i)*conic.cone.b;
+    var vertex = new THREE.Vector3(x, conic.cone.h, z);
+    var l1ne = new line(new THREE.Vector3(-vertex.x, -vertex.y, -vertex.z), vertex);
+    var int = solveForIntersection(l1ne, p1ane);
+    var skip = false;
+    if(int.y > conic.cone.h){
+      skip = true;
+      int = new THREE.Vector3(0,0,0);
+    } else if(int.y < 0){
+      skip = true;
+    }
+    if(!skip){
+      var jumpVertexOld = jumpVertex;
+      jumpVertex = baseVertices.push(vertices.push(vertex));
+      upperVertices.push(vertices.push(int));
+      if(jump != -1){
+        jumpVertex = jumpVertexOld;
+      }
+    } else if(jump === -1){
+      jump = i;
+    }
+
+  }
+  for(var i = 0; i<baseVertices.length; i++){
+    var max = baseVertices.length;
+    if(jump != i+1){
+      faces.push(new THREE.Face3(baseVertices[i%max]-1, baseVertices[i%max], baseVertices[(i+1)%max]-1));
+      faces.push(new THREE.Face3(baseVertices[i%max], baseVertices[(i+1)%max]-1, baseVertices[(i+1)%max]));
+    }
+  }
+  var first = jumpVertex-1;
+  max = upperVertices.length;
+  if(jump != -1 && conic.height > 0){
+    var average = new THREE.Vector3(0,0,0);
+    average.add(vertices[baseVertices[jumpVertex-1]-1]);
+    average.add(vertices[baseVertices[jumpVertex]-1]);
+    average.multiply(new THREE.Vector3(0.5,0.5,0.5));
+    first = vertices.push(average)-1;
+    var upVetClone = upperVertices.slice();
+    while(upVetClone[0] != baseVertices[jumpVertex]-1){
+      upVetClone.push(upVetClone.shift());
+    }
+    upVetClone.push(upVetClone.shift());
+    for(var k = 0; k<upVetClone.length-1; k++){
+      faces.push(new THREE.Face3(first, upVetClone[k]-1, upVetClone[k+1]-1));
+    }
+    faces.push(new THREE.Face3(first, upVetClone[upVetClone.length-1], upVetClone[upVetClone.length-1]+1))
+    faces.push(new THREE.Face3(first, upVetClone[upVetClone.length-2], upVetClone[upVetClone.length-2]+1));
+  } else {
+    average = new THREE.Vector3(0,0,0);
+    for(var i = 0; i<upperVertices.length; i++){
+      var vertex = vertices[upperVertices[i]-1];
+      average.add(vertex);
+    }
+    average.multiply(new THREE.Vector3(1/upperVertices.length, 1/upperVertices.length, 1/upperVertices.length));
+    var averageIndex = vertices.push(average)-1;
+    for(var i = 0; i<upperVertices.length; i++){
+      var vertex = upperVertices[i]-1;
+      var vertex2 = upperVertices[(i+1)%upperVertices.length]-1;
+      var face = new THREE.Face3(vertex, vertex2, averageIndex);
+      faces.push(face);
+    }
+  }
+  var geom = new THREE.Geometry();
+  geom.vertices = vertices;
+  geom.faces = faces;
+  var baseAverage = new THREE.Vector3(0,0,0);
+  for(var i = 0; i<baseVertices.length; i++){
+    baseAverage.add(vertices[baseVertices[i]-1]);
+  }
+  baseAverage.multiply(new THREE.Vector3(1/baseVertices.length,1/baseVertices.length,1/baseVertices.length));
+  for(var i = 0; i<faces.length; i++){
+    var face = faces[i];
+    var v1 = vertices[face.a];
+    var v2 = vertices[face.b];
+    var v3 = vertices[face.c];
+    var u = v2.clone().sub(v1);
+    var v = v3.clone().sub(v1);
+    var normal = new THREE.Vector3(u.y*v.z-u.z*u.y, u.z*v.x-u.x*v.z, u.x*v.y-u.y*v.x);
+    var facePlane = new plane(v1,v2,v3);
+    if(isPointOnSameSideOfPlaneAsNormal(baseAverage, facePlane)){
       normal.multiply(new THREE.Vector3(-1,-1,-1));
     }
     face.normal.copy(normal);
@@ -275,7 +416,6 @@ function animate() {
   requestAnimationFrame( animate );
 
   render();
-  stats.update();
 
 }
 

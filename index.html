@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>three.js webgl - buffergeometry [particles]</title>
+		<title>Conic Creator</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<style>
@@ -26,17 +26,41 @@
 
 				color: #0080ff;
 			}
+
+			.values{
+				position:absolute;
+				height:20px;
+				width:400px;
+				left:0;
+				right:0;
+			}
+
+			.value{
+				display:inline-block;
+				width:18%;
+				height:100%;
+			}
+			.input{
+				width:80%;
+			}
+
 		</style>
 	</head>
 	<body>
 
-		<div id="container"></div>
-		<div id="info"><a href="http://threejs.org" target="_blank">three.js</a> webgl - buffergeometry - particles</div>
+		<div id="info">Conic Creator, Using <a href="http://threejs.org" target="_blank">three.js</a> for rendering the cone</div>
+		<div class="values">
+			<div class="value">α <input id="alpha" type="text" value="45" class="input"></input></div>
+			<div class="value">β <input id="beta" type="text" value="30" class="input"></input></div>
+			<div class="value">ℓ <input id="length" type="text" value="10" class="input"></input></div>
+			<div class="value">h <input id="height" type="text" value="-2" class="input"></input></div>
+			<div class="value">quality <input id="quality" type="text" value="100" class="input"></input></div>
+		</div>
+		<div id="container" class="container"></div>
 
 		<script src="three.js"></script>
 
 		<script src="Detector.js"></script>
-		<script src="stats.min.js"></script>
 
 		<script src="OrbitControls.js"></script>
 		<script src="conic.js"></script>
